@@ -158,6 +158,29 @@ class rhvoice extends module
     function processSubscription($event, &$details)
     {
         $this->getConfig();
+        // add for Terminals2
+        if ($details['SOURCE']) {
+            if (($event == 'SAY' OR $event == 'SAYTO' OR $event == 'SAYREPLY') AND !$this->config['DISABLED']) {
+                $voice = $this->config['VOICE'];
+                DebMes("Processing $event: " . json_encode($details, JSON_UNESCAPED_UNICODE), 'terminals');
+                $out                        = '';
+                $message                    = $details['MESSAGE'];
+                $level                      = $details['IMPORTANCE'];
+                $mmd5                       = md5($message);
+                $cached_filename            = ROOT . 'cms/cached/voice/rh_' . $mmd5 . '.wav';
+                $details['CACHED_FILENAME'] = $cached_filename;
+                $details['tts_engine']      = 'rhvoice_tts';
+                if (!file_exists($cached_filename)) {
+                    $cmd = 'echo "' . $details['MESSAGE'] . '" | RHVoice-test -o "' . $cached_filename . '" -p ' . $voice;
+                    safe_exec($cmd, 1, $level, processSubscriptionsSafe('SAY_CACHED_READY', $details));
+                } else {
+                    processSubscriptions('SAY_CACHED_READY', $details);
+                }
+                $details['BREAK'] = true;
+            }
+            return true;
+        }
+        
         $level = (int)$details['level'];
         $message = $details['message'];
         $voice = $this->config['VOICE'];
@@ -232,9 +255,10 @@ class rhvoice extends module
      */
     function install($data = '')
     {
-        subscribeToEvent($this->name, 'SAY');
-        subscribeToEvent($this->name, 'SAYTO');
-        subscribeToEvent($this->name, 'ASK');
+        subscribeToEvent($this->name, 'SAY', '', 100);
+        subscribeToEvent($this->name, 'SAYTO', '', 100);
+        subscribeToEvent($this->name, 'ASK', '', 100);
+		subscribeToEvent($this->name, 'SAYREPLY', '', 100);
         parent::install();
     }
 
@@ -247,9 +271,10 @@ class rhvoice extends module
      */
     function uninstall()
     {
-        unsubscribeFromEvent($this->name, 'SAY');
+       unsubscribeFromEvent($this->name, 'SAY');
         unsubscribeFromEvent($this->name, 'SAYTO');
         unsubscribeFromEvent($this->name, 'ASK');
+        unsubscribeFromEvent($this->name, 'SAYREPLY');
         parent::uninstall();
     }
 
